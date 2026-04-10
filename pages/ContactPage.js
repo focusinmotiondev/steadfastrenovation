@@ -32,9 +32,20 @@ export default function ContactPage() {
     }));
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!canSubmit) return;
-    saveLead(form);
+    try {
+      // Try API route first (handles Supabase save + Twilio SMS + auto-email)
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("API failed");
+    } catch {
+      // Fallback: save directly to Supabase/localStorage
+      await saveLead(form);
+    }
     setDone(true);
     setForm(emptyForm);
   };

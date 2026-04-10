@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import AdminShell from "../../components/admin/AdminShell";
 import RequireAdmin from "../../components/admin/RequireAdmin";
@@ -7,8 +7,13 @@ import { C } from "../../constants";
 import { formatDate, getLeads, updateLead } from "../../lib/crm";
 
 export default function AdminArchivePage() {
-  const [leads, setLeads] = useState(() => getLeads().filter((l) => l.archived));
-  const refresh = () => setLeads(getLeads().filter((l) => l.archived));
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const refresh = async () => { const all = await getLeads(); setLeads(all.filter((l) => l.archived)); };
+  useEffect(() => { refresh().then(() => setLoading(false)); }, []);
+
+  if (loading) return <RequireAdmin><AdminShell title="Archive"><p style={{ fontFamily: "var(--font-body)", color: C.textMid }}>Loading...</p></AdminShell></RequireAdmin>;
+
   return (
     <RequireAdmin>
       <AdminShell title="Archive" subtitle="Closed and archived client records.">
@@ -21,7 +26,7 @@ export default function AdminArchivePage() {
                   <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: C.textMid }}>{l.phone} · {l.email} · {formatDate(l.createdAt)}</p>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => { updateLead(l.id, { archived: false, status: "contacted" }); refresh(); }} style={btnO}>Restore</button>
+                  <button onClick={async () => { await updateLead(l.id, { archived: false, status: "contacted" }); refresh(); }} style={btnO}>Restore</button>
                   <Link href={`/admin/clients/${l.id}`} style={btnG}>View</Link>
                 </div>
               </div>
