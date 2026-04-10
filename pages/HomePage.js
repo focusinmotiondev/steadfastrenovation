@@ -15,7 +15,7 @@ export default function HomePage() {
       {/* ─── HERO (Video Background) ─── */}
       <section style={{ position: "relative", height: "100vh", minHeight: 600, overflow: "hidden" }}>
         <video autoPlay muted loop playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}>
-        <source src="/videos/landing.mp4" type="video/mp4" />
+        <source src="/videos/landing-v2.mp4" type="video/mp4" />
         </video>
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.55) 100%)" }} />
         <div style={{ position: "absolute", bottom: 48, left: "50%", transform: "translateX(-50%)", opacity: loaded ? 0.5 : 0, transition: "opacity 1.5s ease 1.2s" }}>
