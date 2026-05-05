@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import AdminShell from "../../components/admin/AdminShell";
 import RequireAdmin from "../../components/admin/RequireAdmin";
 import { C } from "../../constants";
+import { LOGO_BASE64 } from "../../lib/logo";
 import {
   LEAD_STATUSES, COMPANY, currency, formatDateTime, formatDate,
   getInvoices, getLeadById, saveInvoice, updateLead, addPayment,
-  getClientBalance, getSettings,
+  getClientBalance, getSettings, updateInvoice,
 } from "../../lib/crm";
 
 export default function AdminClientDetailPage({ clientId }) {
@@ -19,12 +20,12 @@ export default function AdminClientDetailPage({ clientId }) {
   const [loading, setLoading] = useState(true);
   const [savedMsg, setSavedMsg] = useState("");
   const [payForm, setPayForm] = useState({ amount: "", type: "payment", note: "" });
+  const [editingInv, setEditingInv] = useState(null);
   const settings = getSettings();
 
   const today = new Date().toISOString().split("T")[0];
   const [invForm, setInvForm] = useState({
-    invoiceNumber: "",
-    invoiceDate: today,
+    invoiceNumber: "", invoiceDate: today,
     notes: "", deposit: "",
     items: [{ description: "", qty: 1, rate: "" }],
   });
@@ -56,18 +57,51 @@ export default function AdminClientDetailPage({ clientId }) {
 
   const flash = (msg) => { setSavedMsg(msg); setTimeout(() => setSavedMsg(""), 2000); };
 
-  const createInvoice = async () => {
-    await saveInvoice({
-      clientId: lead.id,
-      invoiceNumber: invForm.invoiceNumber || undefined,
-      invoiceDate: invForm.invoiceDate,
-      notes: invForm.notes,
-      items: invForm.items,
-      subtotal, tax, taxRate: settings.taxRate, total: invTotal, deposit,
-      client: { name: lead.name, address: lead.location || "", email: lead.email, phone: lead.phone },
-    });
+  const resetForm = () => {
     setInvForm({ invoiceNumber: "", invoiceDate: today, notes: "", deposit: "", items: [{ description: "", qty: 1, rate: "" }] });
-    flash("Invoice created!");
+    setEditingInv(null);
+  };
+
+  const startEdit = (inv) => {
+    setEditingInv(inv.id);
+    setInvForm({
+      invoiceNumber: inv.invoiceNumber || "",
+      invoiceDate: inv.invoiceDate ? inv.invoiceDate.split("T")[0] : today,
+      notes: inv.notes || "",
+      deposit: inv.deposit || "",
+      items: (inv.items || []).map((it) => ({ description: it.description || "", qty: it.qty || 1, rate: it.rate || it.amount || "" })),
+    });
+    // Scroll to builder
+    document.getElementById("invoice-builder")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const createOrUpdateInvoice = async () => {
+    if (editingInv) {
+      // Update existing
+      await updateInvoice(editingInv, {
+        invoice_number: Number(invForm.invoiceNumber) || undefined,
+        invoice_date: invForm.invoiceDate,
+        notes: invForm.notes,
+        items: invForm.items,
+        subtotal, tax, tax_rate: settings.taxRate, total: invTotal,
+        deposit,
+        client_data: { name: lead.name, address: lead.location || "", email: lead.email, phone: lead.phone },
+      });
+      flash("Invoice updated!");
+    } else {
+      // Create new
+      await saveInvoice({
+        clientId: lead.id,
+        invoiceNumber: invForm.invoiceNumber || undefined,
+        invoiceDate: invForm.invoiceDate,
+        notes: invForm.notes,
+        items: invForm.items,
+        subtotal, tax, taxRate: settings.taxRate, total: invTotal, deposit,
+        client: { name: lead.name, address: lead.location || "", email: lead.email, phone: lead.phone },
+      });
+      flash("Invoice created!");
+    }
+    resetForm();
     await refresh();
   };
 
@@ -95,9 +129,11 @@ th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:2px;co
 td{padding:14px 10px;border-bottom:1px solid #EDEBE6;vertical-align:top;font-size:13px}
 .r{text-align:right}
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:30px;border-bottom:3px solid #C9A96E}
-.logo-area h2{font-size:22px;font-weight:800;letter-spacing:1px;margin-bottom:2px;color:#1A1A1A}
-.logo-area .sub{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#C9A96E;font-weight:600;margin-bottom:12px}
-.logo-area .info{font-size:12px;color:#6B6258;line-height:1.9}
+.logo-area{display:flex;align-items:center;gap:16px}
+.logo-area img{width:80px;height:80px;object-fit:contain;border-radius:8px}
+.logo-text h2{font-size:22px;font-weight:800;letter-spacing:1px;margin-bottom:2px;color:#1A1A1A}
+.logo-text .sub{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#C9A96E;font-weight:600;margin-bottom:10px}
+.logo-text .info{font-size:12px;color:#6B6258;line-height:1.9}
 .inv-title{text-align:right}
 .inv-title h1{font-size:42px;font-weight:800;color:#C9A96E;letter-spacing:2px}
 .inv-title .num{font-size:15px;font-weight:600;color:#6B6258;margin-top:4px}
@@ -121,9 +157,12 @@ td{padding:14px 10px;border-bottom:1px solid #EDEBE6;vertical-align:top;font-siz
 
 <div class="header">
   <div class="logo-area">
-    <h2>STEADFAST</h2>
-    <div class="sub">Renovation Inc</div>
-    <div class="info">PHONE: ${COMPANY.phone}<br>EMAIL: ${COMPANY.email}<br>HST#: ${COMPANY.hst}</div>
+    <img src="${LOGO_BASE64}" alt="Steadfast Renovation" />
+    <div class="logo-text">
+      <h2>STEADFAST</h2>
+      <div class="sub">Renovation Inc</div>
+      <div class="info">PHONE: ${COMPANY.phone}<br>EMAIL: ${COMPANY.email}<br>HST#: ${COMPANY.hst}</div>
+    </div>
   </div>
   <div class="inv-title">
     <h1>INVOICE</h1>
@@ -232,9 +271,12 @@ ${inv.notes ? `<div class="notes-box"><div class="label">Notes / Terms</div><p>$
             </section>
 
             {/* Invoice Builder */}
-            <section style={panel}>
-              <h2 style={panelTitle}>Build an invoice</h2>
-              <p style={panelDesc}>Create a professional invoice for this client.</p>
+            <section style={{ ...panel, border: editingInv ? `2px solid ${C.accent}` : `1px solid ${C.borderLight}` }} id="invoice-builder">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <h2 style={panelTitle}>{editingInv ? "Edit Invoice" : "Build an invoice"}</h2>
+                {editingInv && <button onClick={resetForm} style={{ ...btn, background: "transparent", color: C.text, border: `1px solid ${C.border}` }}>Cancel edit</button>}
+              </div>
+              <p style={panelDesc}>{editingInv ? "Editing an existing invoice. Save when done." : "Create a professional invoice for this client."}</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginTop: 14 }} className="admin-mini-grid">
                 <div><label style={labelS}>Invoice # (auto if blank)</label><input value={invForm.invoiceNumber} onChange={(e) => setInvForm({ ...invForm, invoiceNumber: e.target.value })} style={inputS} placeholder="e.g. 1001" /></div>
                 <div><label style={labelS}>Invoice Date</label><input type="date" value={invForm.invoiceDate} onChange={(e) => setInvForm({ ...invForm, invoiceDate: e.target.value })} style={inputS} /></div>
@@ -262,7 +304,7 @@ ${inv.notes ? `<div class="notes-box"><div class="label">Notes / Terms</div><p>$
                 {deposit > 0 && <><div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#22A06B", fontWeight: 600 }}>Deposit</span><span style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#22A06B", fontWeight: 600 }}>-{currency(deposit)}</span></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700 }}>Balance Owing</span><span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700 }}>{currency(invTotal - deposit)}</span></div></>}
               </div>
-              <button onClick={createInvoice} style={{ ...btn, marginTop: 16, width: "100%", justifyContent: "center", padding: "14px" }}>Create Invoice</button>
+              <button onClick={createOrUpdateInvoice} style={{ ...btn, marginTop: 16, width: "100%", justifyContent: "center", padding: "14px" }}>{editingInv ? "Save Changes" : "Create Invoice"}</button>
             </section>
           </div>
 
@@ -280,12 +322,15 @@ ${inv.notes ? `<div class="notes-box"><div class="label">Notes / Terms</div><p>$
             <section style={panel}>
               <h3 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 14 }}>Saved Invoices</h3>
               {clientInvoices.length ? clientInvoices.map((inv) => (
-                <div key={inv.id} style={{ padding: 14, borderRadius: 10, border: `1px solid ${C.borderLight}`, marginBottom: 8 }}>
+                <div key={inv.id} style={{ padding: 14, borderRadius: 10, border: `1px solid ${C.borderLight}`, marginBottom: 10 }}>
                   <p style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, letterSpacing: 1.5, color: C.textLight, textTransform: "uppercase" }}>Invoice #{inv.invoiceNumber}</p>
                   <p style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: C.text, marginTop: 2 }}>{currency(inv.total)}</p>
                   {Number(inv.deposit || 0) > 0 && <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#5243AA" }}>Deposit: {currency(inv.deposit)}</p>}
                   <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: C.textMid, marginTop: 4 }}>{formatDate(inv.invoiceDate || inv.createdAt)}</p>
-                  <button onClick={() => downloadInvoice(inv)} style={{ ...btn, padding: "7px 14px", fontSize: 12, marginTop: 8 }}>Download / Print</button>
+                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                    <button onClick={() => downloadInvoice(inv)} style={{ ...btn, padding: "7px 12px", fontSize: 12 }}>Download</button>
+                    <button onClick={() => startEdit(inv)} style={{ ...btn, padding: "7px 12px", fontSize: 12, background: "transparent", color: C.text, border: `1px solid ${C.border}` }}>Edit</button>
+                  </div>
                 </div>
               )) : <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: C.textMid }}>No invoices yet.</p>}
             </section>
