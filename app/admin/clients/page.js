@@ -4,7 +4,7 @@ import Link from "next/link";
 import AdminShell from "../../../components/admin/AdminShell";
 import RequireAdmin from "../../../components/admin/RequireAdmin";
 import { C } from "../../../constants";
-import { formatDate, getLeads, getInvoices, getClientBalance, STATUS_COLORS } from "../../../lib/crm";
+import { formatDate, getLeads, STATUS_COLORS } from "../../../lib/crm";
 
 export default function ClientsListPage() {
   const [leads, setLeads] = useState([]);
